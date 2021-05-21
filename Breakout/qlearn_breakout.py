@@ -36,6 +36,8 @@ REPLAY_MEMORY = 50000 # number of previous transitions to remember
 BATCH = 32 # size of minibatch
 FRAME_PER_ACTION = 1
 LEARNING_RATE = 1e-4
+#MAX_STEPS_PER_EPISODE = 1000
+EPISODES = 5
 
 img_rows, img_cols = 80, 80
 #Convert image into Black and white
@@ -55,7 +57,7 @@ def buildmodel():
     model.add(Activation('relu'))
     model.add(Dense(2))
 
-    adam = Adam(lr = LEARNING_RATE)
+    adam = Adam(learning_rate = LEARNING_RATE)
     model.compile(loss='mse', optimizer = adam)
     print("We finish building the model")
     return model
@@ -64,7 +66,6 @@ def trainNetwork(model,args):
     # open up a game state to communicate with emulator
     env =  gym.make('BreakoutDeterministic-v4')
     env.reset()
-    env.render()
     # store the previous observations in replay memory
     D = deque()
     
@@ -98,7 +99,7 @@ def trainNetwork(model,args):
         epsilon = FINAL_EPSILON # higher epsilon, more timestamps?
         print ("Now we load weight")
         model.load_weights("model_v1.h5")
-        adam = Adam(lr = LEARNING_RATE)
+        adam = Adam(learning_rate = LEARNING_RATE)
         model.compile(loss = 'mse', optimizer = adam)
         print ("Weight load successfully")
         t = 0
@@ -118,7 +119,8 @@ def trainNetwork(model,args):
         epsilon = INITIAL_EPSILON #o EPSILON é o que divide a parte de exploration vs exploitation. se for abaixo de um dado valor é exploration. Caso contrário é exploitation
         t = 0
 
-    while (True):
+    while (not terminal):
+    #for i in range(MAX_STEPS_PER_EPISODE):
         loss = 0
         Q_sa = 0 # Q(s, a) representing the maximum discounted future reward when we perform action a in state s.
         action_index = 0
@@ -180,7 +182,7 @@ def trainNetwork(model,args):
         t = t + 1
 
         # save progress every 1000 iterations
-        if t % 1000 == 0:
+        if t % 10 == 0:
             print("Now we save model")
             model.save_weights("model.h5", overwrite = True)
             with open("model.json", "w") as outfile:
@@ -209,8 +211,10 @@ def playGame(args):
 def main():
     parser = argparse.ArgumentParser(description = 'Description of your program')
     parser.add_argument('-m','--mode', help = 'Train / CTrain / Run', required=True)
+    #parser.add_argument('-m','--mode', help = 'Train / CTrain / Run', required=True) adicionar o argumento de número de episódios
     args = vars(parser.parse_args())
-    playGame(args)
+    for i in range(EPISODES):
+        playGame(args)
 
 if __name__ == "__main__":
     gpus = tf.config.experimental.list_physical_devices('GPU')
