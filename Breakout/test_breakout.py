@@ -1,5 +1,7 @@
-# Import the gym module
-import gym
+#!/usr/bin/env python
+
+import sys, gym, time
+import numpy as np
 
 # Create a breakout environment
 env = gym.make('BreakoutDeterministic-v4')
@@ -8,9 +10,12 @@ frame = env.reset()
 # Render
 env.render()
 
+actions = np.arange(0,4)
+
 is_done = False
 while not is_done:
-  # Perform a random action, returns the new frame, reward and whether the game is over
+    # Perform a random action, returns the new frame, reward and whether the game is over
     frame, reward, is_done, _ = env.step(env.action_space.sample())
-  # Render
+    # Render
     env.render()
+    time.sleep(0.1)

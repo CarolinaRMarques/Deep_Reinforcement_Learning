@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+
+
+#https://becominghuman.ai/lets-build-an-atari-ai-part-1-dqn-df57e8ff3b26
 from __future__ import print_function
 
 import argparse
@@ -17,17 +20,18 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
 from tensorflow.keras.optimizers import SGD , Adam
 import tensorflow as tf
+import agent
 # Import the gym module
 import gym
 
 GAME = 'atari' # the name of the game being played for log files
 CONFIG = 'nothreshold'
-ACTIONS = 2 # number of valid actions
+ACTIONS = 4 # number of valid actions
 GAMMA = 0.99 # decay rate of past observations
-OBSERVATION = 3200. # timesteps to observe before training
+OBSERVATION = 3200. # timesteps to observe before training. de cada 3200 frames, vamos ao nosso buffer e selecionamos de forma aleatoria um batch size. Neste caso, 32 frames. em numpy arrays
 EXPLORE = 3000000. # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001 # final value of epsilon
-INITIAL_EPSILON = 0.1 # starting value of epsilon
+INITIAL_EPSILON = 0.1 # starting value of epsilon EPSILON é para ver o exploration vs exploitation
 REPLAY_MEMORY = 50000 # number of previous transitions to remember
 BATCH = 32 # size of minibatch
 FRAME_PER_ACTION = 1
@@ -40,42 +44,48 @@ img_channels = 4 #We stack 4 frames
 def buildmodel():
     print("Now we build the model")
     model = Sequential()
-    model.add(Conv2D(filters=32, kernel_size=(8, 8), strides=(4, 4), padding='same', input_shape=(img_rows,img_cols,img_channels)))  #80*80*4
+    model.add(Conv2D(filters = 32, kernel_size = (8, 8), strides = (4, 4), padding = 'same', input_shape = (img_rows, img_cols, img_channels)))  #80*80*4
     model.add(Activation('relu'))
-    model.add(Conv2D(filters=64, kernel_size=(4, 4), strides=(2, 2), padding='same'))
+    model.add(Conv2D(filters = 64, kernel_size = (4, 4), strides = (2, 2), padding = 'same'))
     model.add(Activation('relu'))
-    model.add(Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1), padding='same'))
+    model.add(Conv2D(filters = 64, kernel_size = (3, 3), strides = (1, 1), padding = 'same'))
     model.add(Activation('relu'))
     model.add(Flatten())
     model.add(Dense(512))
     model.add(Activation('relu'))
     model.add(Dense(2))
 
-    adam = Adam(lr=LEARNING_RATE)
-    model.compile(loss='mse',optimizer=adam)
+    adam = Adam(lr = LEARNING_RATE)
+    model.compile(loss='mse', optimizer = adam)
     print("We finish building the model")
     return model
 
 def trainNetwork(model,args):
     # open up a game state to communicate with emulator
-    game =  gym.make('BreakoutDeterministic-v4')
-    game.reset()
-
+    env =  gym.make('BreakoutDeterministic-v4')
+    env.reset()
+    env.render()
     # store the previous observations in replay memory
     D = deque()
-
+    
+    #----------------------------------------
+    #PARA OBTER O SIGNIFICADO DAS AÇÕES POSSíVEIS
+    print(env.unwrapped.get_action_meanings())
+    #----------------------------------------
+    
     # get the first state by doing nothing and preprocess the image to 80x80x4
-    do_nothing = np.zeros(ACTIONS)
-    do_nothing[0] = 1
-    x_t, r_0, terminal = game.step(do_nothing)
+        
+    x_t, r_0, terminal, info = env.step(1) #COMEÇAR O JOGO COM A AÇÃO "FIRE"
+    env.render()
 
     x_t = skimage.color.rgb2gray(x_t)
-    x_t = skimage.transform.resize(x_t,(80,80))
-    x_t = skimage.exposure.rescale_intensity(x_t,out_range=(0,255))
+    x_t = skimage.transform.resize(x_t, (80,80))
+    x_t = skimage.exposure.rescale_intensity(x_t, out_range = (0,255))
 
     x_t = x_t / 255.0
 
-    s_t = np.stack((x_t, x_t, x_t, x_t), axis=2)
+    s_t = np.stack((x_t, x_t, x_t, x_t), axis = 2) #colocar a sequência de frames. 4 frames sequenciais, que vamos aplicar à nossa lista. Para conseguir a estabilidade de imagens sequenciais
+    
     #print (s_t.shape)
 
     #In Keras, need to reshape
@@ -85,11 +95,11 @@ def trainNetwork(model,args):
 
     if args['mode'] == 'Run':
         OBSERVE = 999999999	#We keep observe, never train
-        epsilon = FINAL_EPSILON
+        epsilon = FINAL_EPSILON # higher epsilon, more timestamps?
         print ("Now we load weight")
         model.load_weights("model_v1.h5")
-        adam = Adam(lr=LEARNING_RATE)
-        model.compile(loss='mse',optimizer=adam)
+        adam = Adam(lr = LEARNING_RATE)
+        model.compile(loss = 'mse', optimizer = adam)
         print ("Weight load successfully")
         t = 0
 
@@ -98,28 +108,29 @@ def trainNetwork(model,args):
         epsilon = 0.07823368810419994 #0.08811709480229288
         print ("Now we load weight")
         model.load_weights("model.h5")
-        adam = Adam(lr=LEARNING_RATE)
-        model.compile(loss='mse', optimizer=adam)
+        adam = Adam(lr = LEARNING_RATE)
+        model.compile(loss = 'mse', optimizer = adam)
         print ("Weight load successfully")
         t = 0 #360045
 
-    else:					   #We go to training mode
+    else:					   #We go to training mode -> -m "Train"
         OBSERVE = OBSERVATION
-        epsilon = INITIAL_EPSILON
+        epsilon = INITIAL_EPSILON #o EPSILON é o que divide a parte de exploration vs exploitation. se for abaixo de um dado valor é exploration. Caso contrário é exploitation
         t = 0
 
     while (True):
         loss = 0
-        Q_sa = 0
+        Q_sa = 0 # Q(s, a) representing the maximum discounted future reward when we perform action a in state s.
         action_index = 0
-        r_t = 0
-        a_t = np.zeros([ACTIONS])
+        r_t = 0 #reward
+        a_t = np.zeros([ACTIONS]) #action
         #choose an action epsilon greedy
         if t % FRAME_PER_ACTION == 0:
             if random.random() <= epsilon:
                 print("----------Random Action----------")
                 action_index = random.randrange(ACTIONS)
                 a_t[action_index] = 1
+                
             else:
                 q = model.predict(s_t)	   #input a stack of 4 images, get the prediction
                 max_Q = np.argmax(q)
@@ -130,12 +141,13 @@ def trainNetwork(model,args):
         if epsilon > FINAL_EPSILON and t > OBSERVE:
             epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
 
-        #run the selected action and observed next state and reward
-        x_t1_colored, r_t, terminal = game_state.frame_step(a_t)
-
+        #run the selected action and observed next state and reward. DEPOIS DE UM "STEP" correr sempre o "RENDER"
+        x_t1_colored, r_t, terminal, info = env.step(np.where(a_t == 1)[0][0]) #FUNÇÂO "WHERE" para obter o índice do valor do array que está a 1
+        env.render()
+        
         x_t1 = skimage.color.rgb2gray(x_t1_colored)
-        x_t1 = skimage.transform.resize(x_t1,(80,80))
-        x_t1 = skimage.exposure.rescale_intensity(x_t1, out_range=(0, 255))
+        x_t1 = skimage.transform.resize(x_t1, (80, 80))
+        x_t1 = skimage.exposure.rescale_intensity(x_t1, out_range = (0, 255))
 
 
         x_t1 = x_t1 / 255.0
@@ -150,7 +162,7 @@ def trainNetwork(model,args):
             D.popleft()
 
         #only train if done observing
-        if t > OBSERVE:
+        if t > OBSERVE: #train ou update da nossa rede. de quantas em quantas frames vamos precisar para fazer um treino. se replay_mem começar a ficar mto cheio retira a última entrada. e fazemos append das novas decisoes que foram sendo adquiridas
             #sample a minibatch to train on
             minibatch = random.sample(D, BATCH)
 
@@ -160,9 +172,9 @@ def trainNetwork(model,args):
             state_t1 = np.concatenate(state_t1)
             targets = model.predict(state_t)
             Q_sa = model.predict(state_t1)
-            targets[range(BATCH), action_t] = reward_t + GAMMA*np.max(Q_sa, axis=1)*np.invert(terminal)
+            targets[range(BATCH), action_t] = reward_t + GAMMA * np.max(Q_sa, axis = 1) * np.invert(terminal) #qual o target associado
 
-            loss += model.train_on_batch(state_t, targets)
+            loss += model.train_on_batch(state_t, targets) #quanto mais proximo de zero, mais proximo está de convergir para conseguir estimar o key value de acordo com o par (estado, ação)
 
         s_t = s_t1
         t = t + 1
@@ -170,7 +182,7 @@ def trainNetwork(model,args):
         # save progress every 1000 iterations
         if t % 1000 == 0:
             print("Now we save model")
-            model.save_weights("model.h5", overwrite=True)
+            model.save_weights("model.h5", overwrite = True)
             with open("model.json", "w") as outfile:
                 json.dump(model.to_json(), outfile)
 
@@ -195,8 +207,8 @@ def playGame(args):
     trainNetwork(model,args)
 
 def main():
-    parser = argparse.ArgumentParser(description='Description of your program')
-    parser.add_argument('-m','--mode', help='Train / CTrain / Run', required=True)
+    parser = argparse.ArgumentParser(description = 'Description of your program')
+    parser.add_argument('-m','--mode', help = 'Train / CTrain / Run', required=True)
     args = vars(parser.parse_args())
     playGame(args)
 
