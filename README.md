@@ -13,7 +13,7 @@ cd Breakout
 python qlearn.py -m "CTrain"
 ```
 
---
+---
 ## Authors
 
 -   **Carolina Marques:** [CarolinaRMarques](https://github.com/CarolinaRMarques)
