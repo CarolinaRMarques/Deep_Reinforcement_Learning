@@ -8,10 +8,10 @@ libraries. For this, it will be necessary to develop a DRL algorithm capable of 
 Based on: https://github.com/ShanHaoYu/Deep-Q-Network-Breakout
 
 ### How to run
-'''bash
+```bash
 cd Breakout
 python qlearn.py -m "CTrain"
-'''
+```
 
 --
 ## Authors
