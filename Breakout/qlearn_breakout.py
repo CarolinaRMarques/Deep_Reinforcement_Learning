@@ -37,9 +37,9 @@ BATCH = 32 # size of minibatch
 FRAME_PER_ACTION = 1
 LEARNING_RATE = 1e-4
 #MAX_STEPS_PER_EPISODE = 1000
-EPISODES = 5
+EPISODES = 10000
 
-img_rows, img_cols = 80, 80
+img_rows, img_cols = 84, 84
 #Convert image into Black and white
 img_channels = 4 #We stack 4 frames
 
@@ -80,7 +80,7 @@ def trainNetwork(model,args):
     env.render()
 
     x_t = skimage.color.rgb2gray(x_t)
-    x_t = skimage.transform.resize(x_t, (80,80))
+    x_t = skimage.transform.resize(x_t, (84,84))
     x_t = skimage.exposure.rescale_intensity(x_t, out_range = (0,255))
 
     x_t = x_t / 255.0
@@ -148,15 +148,14 @@ def trainNetwork(model,args):
         env.render()
         
         x_t1 = skimage.color.rgb2gray(x_t1_colored)
-        x_t1 = skimage.transform.resize(x_t1, (80, 80))
+        x_t1 = skimage.transform.resize(x_t1, (84, 84))
         x_t1 = skimage.exposure.rescale_intensity(x_t1, out_range = (0, 255))
-
-
+        
         x_t1 = x_t1 / 255.0
 
 
         x_t1 = x_t1.reshape(1, x_t1.shape[0], x_t1.shape[1], 1) #1x80x80x1
-        s_t1 = np.append(x_t1, s_t[:, :, :, :3], axis=3)
+        s_t1 = np.append(x_t1, s_t[:, :, :, :3], axis = 3)
 
         # store the transition in D
         D.append((s_t, action_index, r_t, s_t1, terminal))
@@ -177,7 +176,7 @@ def trainNetwork(model,args):
             targets[range(BATCH), action_t] = reward_t + GAMMA * np.max(Q_sa, axis = 1) * np.invert(terminal) #qual o target associado
 
             loss += model.train_on_batch(state_t, targets) #quanto mais proximo de zero, mais proximo está de convergir para conseguir estimar o key value de acordo com o par (estado, ação)
-
+            
         s_t = s_t1
         t = t + 1
 
@@ -197,6 +196,8 @@ def trainNetwork(model,args):
         else:
             state = "train"
 
+        print("LOSS", loss)
+
         print("TIMESTEP", t, "/ STATE", state, \
             "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", r_t, \
             "/ Q_MAX " , np.max(Q_sa), "/ Loss ", loss)
@@ -214,6 +215,7 @@ def main():
     #parser.add_argument('-m','--mode', help = 'Train / CTrain / Run', required=True) adicionar o argumento de número de episódios
     args = vars(parser.parse_args())
     for i in range(EPISODES):
+        print("EPISODE", i)
         playGame(args)
 
 if __name__ == "__main__":
